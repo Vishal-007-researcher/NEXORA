@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nexora Weather</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Segoe UI, Arial, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+
+  /* Login screen */
+  .auth-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+  .auth-card { background: #1e293b; border-radius: 16px; padding: 28px; width: 100%; max-width: 380px; }
+  .auth-logo { font-size: 28px; font-weight: 700; color: #38bdf8; text-align: center; margin-bottom: 4px; }
+  .auth-sub { color: #94a3b8; text-align: center; margin-bottom: 20px; font-size: 14px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 18px; }
+  .tab { flex: 1; background: #0f172a; color: #94a3b8; border: 0; padding: 10px; border-radius: 8px; cursor: pointer; font-size: 15px; }
+  .tab.active { background: #38bdf8; color: #0f172a; font-weight: 600; }
+  .auth-card input { width: 100%; background: #0f172a; color: #e2e8f0; border: 1px solid #334155; padding: 12px; border-radius: 8px; font-size: 15px; margin-bottom: 12px; }
+  .auth-msg { font-size: 13px; min-height: 18px; margin-bottom: 10px; }
+  .auth-msg.err { color: #fca5a5; }
+  .auth-msg.ok { color: #86efac; }
+  .hint { color: #94a3b8; font-size: 12px; margin-bottom: 12px; }
+  .auth-card button.submit { width: 100%; background: #38bdf8; color: #0f172a; border: 0; padding: 12px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; }
+  .auth-card button.submit:disabled { opacity: 0.6; cursor: default; }
+
+  /* App */
+  #app { display: none; min-height: 100vh; }
+  .sidebar { width: 210px; background: #111c33; padding: 24px 14px; flex-shrink: 0; display: flex; flex-direction: column; }
+  .logo { font-size: 22px; font-weight: 700; margin: 0 10px 20px; color: #38bdf8; }
+  .nav { display: block; width: 100%; text-align: left; background: none; color: #94a3b8; border: 0; padding: 12px 14px; border-radius: 10px; font-size: 15px; cursor: pointer; margin-bottom: 6px; }
+  .nav:hover { background: #1e293b; color: #e2e8f0; }
+  .nav.active { background: #1e293b; color: #38bdf8; font-weight: 600; }
+  #cityBox { margin: 0 4px 18px; }
+  #cityBox .label { margin-bottom: 6px; }
+  #cityBox select { width: 100%; margin-bottom: 0; }
+  .userbox { margin-top: auto; padding: 14px 4px 0; }
+  .userbox .who { font-size: 12px; color: #94a3b8; }
+  .userbox .uname { font-size: 15px; color: #e2e8f0; margin-bottom: 10px; word-break: break-all; }
+  .logout { width: 100%; background: #334155; color: #e2e8f0; border: 0; padding: 9px 14px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+  .logout:hover { background: #475569; }
+  .main { flex: 1; padding: 28px; max-width: 900px; }
+  .page { display: none; }
+  .page.active { display: block; }
+  h1 { font-size: 28px; margin-bottom: 4px; }
+  h2 { font-size: 16px; margin-bottom: 12px; font-weight: 600; }
+  .sub { color: #94a3b8; margin-bottom: 18px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 20px; }
+  .card { background: #1e293b; border-radius: 14px; padding: 18px; margin-bottom: 18px; }
+  .grid .card { margin-bottom: 0; }
+  .label { color: #94a3b8; font-size: 13px; margin-bottom: 6px; }
+  .value { font-size: 30px; font-weight: 600; }
+  .bar { height: 14px; background: #334155; border-radius: 8px; overflow: hidden; margin: 14px 0 10px; }
+  .fill { height: 100%; width: 0; background: #38bdf8; transition: width .6s; }
+  .fill.om { background: #34d399; }
+  .big { font-size: 40px; font-weight: 700; }
+  .msg { font-size: 16px; margin-top: 6px; }
+  .note { color: #94a3b8; font-size: 12px; margin-top: 14px; }
+  .warn { background: #422006; color: #fcd34d; padding: 10px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 18px; display: none; }
+  select { background: #1e293b; color: #e2e8f0; border: 1px solid #334155; padding: 10px 14px; border-radius: 8px; font-size: 15px; cursor: pointer; }
+  button.action { margin-top: 4px; background: #38bdf8; color: #0f172a; border: 0; padding: 10px 20px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  .error { background: #7f1d1d; padding: 12px; border-radius: 10px; margin-bottom: 16px; display: none; }
+  .chartbox { position: relative; height: 260px; }
+  p { line-height: 1.6; color: #cbd5e1; margin-bottom: 10px; }
+  .cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .cmp .big { font-size: 34px; }
+  .verdict { margin-top: 14px; font-size: 15px; color: #cbd5e1; }
+  .fgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
+  .fcard { background: #1e293b; border-radius: 14px; padding: 16px; text-align: center; }
+  .fday { font-size: 14px; color: #94a3b8; margin-bottom: 10px; }
+  .fmax { font-size: 28px; font-weight: 600; }
+  .fmin { font-size: 15px; color: #94a3b8; margin-bottom: 10px; }
+  .frain { font-size: 14px; color: #38bdf8; }
+  .fprob { font-size: 13px; color: #cbd5e1; margin-top: 4px; }
+  @media (max-width: 640px) {
+    #app { flex-direction: column; }
+    .sidebar { width: 100%; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 12px; }
+    .logo { margin: 0 14px 0 4px; }
+    .nav { width: auto; margin: 0; }
+    #cityBox { width: 100%; margin: 10px 0 0; }
+    .userbox { margin-top: 10px; width: 100%; }
+    .cmp { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LOGIN / SIGN UP -->
+<div class="auth-wrap" id="authScreen">
+  <div class="auth-card">
+    <div class="auth-logo">NEXORA</div>
+    <div class="auth-sub">Rainfall prediction</div>
+
+    <div class="tabs">
+      <button class="tab active" id="tab-login" onclick="setAuthMode('login')">Login</button>
+      <button class="tab" id="tab-signup" onclick="setAuthMode('signup')">Sign up</button>
+    </div>
+
+    <input type="text" id="authUser" placeholder="Username" autocomplete="username" onkeydown="if(event.key==='Enter') submitAuth()">
+    <input type="password" id="authPass" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter') submitAuth()">
+    <input type="password" id="authConfirm" placeholder="Confirm password" autocomplete="new-password" style="display:none" onkeydown="if(event.key==='Enter') submitAuth()">
+
+    <div class="hint" id="authHint" style="display:none">Username: 3 to 20 characters (letters, numbers, underscore). Password: at least 8 characters.</div>
+    <div class="auth-msg" id="authMsg"></div>
+
+    <button class="submit" id="authBtn" onclick="submitAuth()">Login</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="sidebar">
+    <div class="logo">NEXORA</div>
+
+    <div id="cityBox">
+      <div class="label">City</div>
+      <select id="city" onchange="onCityChange()">
+        <option value="0">Thanjavur (home)</option>
+        <option value="1">Chennai</option>
+        <option value="2">Coimbatore</option>
+        <option value="3">Madurai</option>
+        <option value="4">Tiruchirappalli</option>
+        <option value="5">Salem</option>
+        <option value="6">Bengaluru</option>
+        <option value="7">Mumbai</option>
+        <option value="8">Delhi</option>
+      </select>
+    </div>
+
+    <button class="nav active" id="nav-dashboard" onclick="show('dashboard', this)">Dashboard</button>
+    <button class="nav" onclick="show('forecast', this)">Forecast</button>
+    <button class="nav" onclick="show('reports', this)">Reports</button>
+    <button class="nav" onclick="show('about', this)">About</button>
+
+    <div class="userbox">
+      <div class="who">Logged in as</div>
+      <div class="uname" id="whoami">--</div>
+      <button class="logout" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="error" id="error">Cannot reach the server. Run <b>python backend/app.py</b> in the terminal and try again.</div>
+
+    <!-- DASHBOARD -->
+    <div class="page active" id="page-dashboard">
+      <h1>Dashboard</h1>
+      <div class="sub" id="updated">Loading...</div>
+
+      <div class="warn" id="cityNote">Our model was trained on Thanjavur data, so the risk score may be less accurate for other cities.</div>
+
+      <div class="grid">
+        <div class="card"><div class="label">Location</div><div class="value" style="font-size:22px" id="loc">--</div><div class="note" id="coords"></div></div>
+        <div class="card"><div class="label">Temperature</div><div class="value" id="temp">--</div></div>
+        <div class="card"><div class="label">Humidity</div><div class="value" id="hum">--</div></div>
+        <div class="card"><div class="label">Rain now</div><div class="value" id="rain">--</div></div>
+      </div>
+
+      <div class="card">
+        <div class="label" id="predLabel">Tomorrow's rain risk score</div>
+        <div class="big" id="prob">--</div>
+        <div class="bar"><div class="fill" id="fill"></div></div>
+        <div class="msg" id="msg"></div>
+        <div class="note">This is a risk score, not a true probability. The model catches about 74% of the days when it rains, but it also warns of rain on some days when none falls (overall accuracy is about 70%). Do not use it in place of an official forecast.</div>
+      </div>
+
+      <div class="card">
+        <div class="label">Compare: tomorrow's rain</div>
+        <div class="cmp">
+          <div>
+            <div class="label">Nexora risk score</div>
+            <div class="big" id="cmpNexora">--</div>
+            <div class="bar"><div class="fill" id="cmpNexoraFill"></div></div>
+          </div>
+          <div>
+            <div class="label">Open-Meteo chance</div>
+            <div class="big" id="cmpOm">--</div>
+            <div class="bar"><div class="fill om" id="cmpOmFill"></div></div>
+          </div>
+        </div>
+        <div class="verdict" id="verdict"></div>
+        <div class="note">The Nexora score is tuned so that it does not miss rainy days, so it is often higher than Open-Meteo's number. The Open-Meteo figure is closer to a real probability.</div>
+      </div>
+
+      <button class="action" onclick="loadDashboard()">Refresh</button>
+    </div>
+
+    <!-- FORECAST -->
+    <div class="page" id="page-forecast">
+      <h1>7-Day Forecast</h1>
+      <div class="sub" id="fsub">Loading...</div>
+      <div class="fgrid" id="fgrid"></div>
+      <div class="note">This is Open-Meteo forecast data, not the Nexora model. The percentage is the chance of rain on that day.</div>
+    </div>
+
+    <!-- REPORTS -->
+    <div class="page" id="page-reports">
+      <h1>Reports</h1>
+      <div class="sub" id="range">Loading...</div>
+
+      <div class="grid">
+        <div class="card"><div class="label">Rainy days</div><div class="value" id="s-rainy">--</div></div>
+        <div class="card"><div class="label">Dry days</div><div class="value" id="s-dry">--</div></div>
+        <div class="card"><div class="label">Heaviest day</div><div class="value" id="s-heavy">--</div><div class="note" id="s-heavy-date"></div></div>
+      </div>
+
+      <div class="card"><h2>Last 7 days rainfall (mm)</h2><div class="chartbox"><canvas id="chart7"></canvas></div></div>
+      <div class="card"><h2>Monthly rainfall, last 12 months in data (mm)</h2><div class="chartbox"><canvas id="chartMonthly"></canvas></div></div>
+      <div class="card"><h2>Yearly rainfall (mm)</h2><div class="chartbox"><canvas id="chartYearly"></canvas></div><div class="note">2026 is not a full year. Data is available only up to September 30.</div></div>
+    </div>
+
+    <!-- ABOUT -->
+    <div class="page" id="page-about">
+      <h1>About Nexora</h1>
+      <div class="sub">Rainfall prediction prototype</div>
+      <div class="card">
+        <p><b>Data source:</b> Open-Meteo (live weather and daily history from 2021 to 2026).</p>
+        <p><b>Model:</b> Logistic regression. It gives a risk score for whether more than 1 mm of rain will fall tomorrow. It uses today's weather, the last 3 and 7 days of rainfall, and pressure and humidity changes.</p>
+        <p><b>Test results:</b> Accuracy is about 70%. The model catches about 74% of rainy days (recall). The baseline, which always predicts "no rain", scores 63%.</p>
+        <p><b>Risk score:</b> To avoid missing rainy days, the model gives extra weight to them during training. As a result, the score is usually higher than a true probability.</p>
+        <p><b>Backend:</b> Python and Flask. Login uses user accounts, and passwords are stored as hashes.</p>
+        <p class="note">Prototype only. Please use the IMD for official forecasts.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "http://127.0.0.1:5000";
+let token = null;
+let sessionUser = null;
+let reportsLoaded = false;
+let authMode = "login";
+const charts = {};
+
+const CITIES = [
+  { name: "Thanjavur", lat: 10.7905, lon: 79.1378 },
+  { name: "Chennai", lat: 13.0827, lon: 80.2707 },
+  { name: "Coimbatore", lat: 11.0168, lon: 76.9558 },
+  { name: "Madurai", lat: 9.9252, lon: 78.1198 },
+  { name: "Tiruchirappalli", lat: 10.7905, lon: 78.7047 },
+  { name: "Salem", lat: 11.6643, lon: 78.1460 },
+  { name: "Bengaluru", lat: 12.9716, lon: 77.5946 },
+  { name: "Mumbai", lat: 19.0760, lon: 72.8777 },
+  { name: "Delhi", lat: 28.6139, lon: 77.2090 }
+];
+
+/* ---------- Session ---------- */
+function saveSession(t, u) {
+  token = t; sessionUser = u;
+  try { localStorage.setItem("nexora_token", t); localStorage.setItem("nexora_user", u); } catch (e) {}
+}
+function loadSession() {
+  try {
+    token = localStorage.getItem("nexora_token");
+    sessionUser = localStorage.getItem("nexora_user");
+  } catch (e) {}
+}
+function clearSession() {
+  token = null; sessionUser = null;
+  try { localStorage.removeItem("nexora_token"); localStorage.removeItem("nexora_user"); } catch (e) {}
+}
+
+async function api(path) {
+  const res = await fetch(API + path, { headers: { "Authorization": "Bearer " + token } });
+  if (res.status === 401) { logout(true); throw new Error("auth"); }
+  return res.json();
+}
+
+/* ---------- Login / Sign up ---------- */
+function authMessage(text, kind) {
+  const el = document.getElementById("authMsg");
+  el.textContent = text || "";
+  el.className = "auth-msg" + (kind ? " " + kind : "");
+}
+
+function setAuthMode(mode) {
+  authMode = mode;
+  document.getElementById("tab-login").classList.toggle("active", mode === "login");
+  document.getElementById("tab-signup").classList.toggle("active", mode === "signup");
+  document.getElementById("authConfirm").style.display = mode === "signup" ? "block" : "none";
+  document.getElementById("authHint").style.display = mode === "signup" ? "block" : "none";
+  document.getElementById("authBtn").textContent = mode === "signup" ? "Create account" : "Login";
+  document.getElementById("authPass").autocomplete = mode === "signup" ? "new-password" : "current-password";
+  authMessage("");
+}
+
+async function submitAuth() {
+  const u = document.getElementById("authUser").value.trim();
+  const p = document.getElementById("authPass").value;
+  if (!u || !p) { authMessage("Please enter your username and password.", "err"); return; }
+
+  const btn = document.getElementById("authBtn");
+  btn.disabled = true;
+  try {
+    if (authMode === "signup") {
+      const c = document.getElementById("authConfirm").value;
+      if (p !== c) { authMessage("The two passwords do not match.", "err"); return; }
+      const res = await fetch(API + "/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: u, password: p })
+      });
+      const data = await res.json();
+      if (!res.ok) { authMessage(data.error || "Sign up failed.", "err"); return; }
+      setAuthMode("login");
+      document.getElementById("authUser").value = u.toLowerCase();
+      document.getElementById("authPass").value = "";
+      document.getElementById("authConfirm").value = "";
+      authMessage(data.message, "ok");
+    } else {
+      const res = await fetch(API + "/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: u, password: p, portal: "user" })
+      });
+      const data = await res.json();
+      if (!res.ok) { authMessage(data.error || "Login failed.", "err"); return; }
+      saveSession(data.token, data.username);
+      enterApp();
+    }
+  } catch (e) {
+    authMessage("Cannot connect to the server. Check that python backend/app.py is running in the terminal.", "err");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function enterApp() {
+  document.getElementById("authScreen").style.display = "none";
+  document.getElementById("app").style.display = "flex";
+  document.getElementById("authPass").value = "";
+  document.getElementById("whoami").textContent = sessionUser;
+  reportsLoaded = false;
+  show("dashboard", document.getElementById("nav-dashboard"));
+  loadDashboard();
+}
+
+function logout(expired) {
+  clearSession();
+  document.getElementById("app").style.display = "none";
+  document.getElementById("authScreen").style.display = "flex";
+  document.getElementById("authPass").value = "";
+  setAuthMode("login");
+  if (expired === true) authMessage("Your session has expired. Please log in again.", "err");
+}
+
+/* ---------- App ---------- */
+function currentCity() {
+  const idx = parseInt(document.getElementById("city").value);
+  return { idx: idx, c: CITIES[idx] };
+}
+
+function show(name, btn) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".nav").forEach(n => n.classList.remove("active"));
+  document.getElementById("page-" + name).classList.add("active");
+  btn.classList.add("active");
+
+  document.getElementById("cityBox").style.display = (name === "dashboard" || name === "forecast") ? "block" : "none";
+
+  if (name === "forecast") loadForecast();
+  if (name === "reports" && !reportsLoaded) loadReports();
+}
+
+function onCityChange() {
+  loadDashboard();
+  if (document.getElementById("page-forecast").classList.contains("active")) loadForecast();
+}
+
+async function loadDashboard() {
+  const err = document.getElementById("error");
+  const { idx, c } = currentCity();
+  const q = "?lat=" + c.lat + "&lon=" + c.lon;
+
+  document.getElementById("cityNote").style.display = idx === 0 ? "none" : "block";
+  document.getElementById("predLabel").textContent = c.name + ": tomorrow's rain risk score";
+
+  try {
+    const [w, p] = await Promise.all([
+      api("/weather" + q),
+      api("/predict" + q)
+    ]);
+    err.style.display = "none";
+
+    document.getElementById("loc").textContent = c.name;
+    document.getElementById("coords").textContent = c.lat + ", " + c.lon;
+    document.getElementById("temp").textContent = w.temperature_2m + " °C";
+    document.getElementById("hum").textContent = w.relative_humidity_2m + " %";
+    document.getElementById("rain").textContent = w.rain + " mm";
+    document.getElementById("updated").textContent = c.name + " | Last updated: " + w.time.replace("T", " ");
+
+    const pct = p.rain_probability_percent;
+    document.getElementById("prob").textContent = pct + " %";
+    document.getElementById("fill").style.width = pct + "%";
+
+    let msg;
+    if (pct >= 70) msg = "High rain risk. Take an umbrella.";
+    else if (pct >= 50) msg = "There is a risk of rain. Keep an umbrella handy.";
+    else msg = "Low rain risk.";
+    document.getElementById("msg").textContent = msg;
+
+    // Compare card
+    const om = p.openmeteo_probability_percent;
+    document.getElementById("cmpNexora").textContent = pct + " %";
+    document.getElementById("cmpNexoraFill").style.width = pct + "%";
+
+    if (om === null || om === undefined) {
+      document.getElementById("cmpOm").textContent = "--";
+      document.getElementById("cmpOmFill").style.width = "0%";
+      document.getElementById("verdict").textContent = "The Open-Meteo probability is not available right now.";
+    } else {
+      document.getElementById("cmpOm").textContent = om + " %";
+      document.getElementById("cmpOmFill").style.width = om + "%";
+      const diff = Math.abs(pct - om).toFixed(1);
+      const sameSide = (pct >= 50) === (om >= 50);
+      const verdict = sameSide
+        ? "Both point the same way (" + (pct >= 50 ? "rain likely" : "rain unlikely") + "). Difference: " + diff + " points."
+        : "The two disagree. Difference: " + diff + " points.";
+      document.getElementById("verdict").textContent = verdict;
+    }
+  } catch (e) {
+    if (e.message !== "auth") err.style.display = "block";
+  }
+}
+
+async function loadForecast() {
+  const err = document.getElementById("error");
+  const { c } = currentCity();
+  const q = "?lat=" + c.lat + "&lon=" + c.lon;
+  document.getElementById("fsub").textContent = c.name + " | Next 7 days";
+
+  try {
+    const f = await api("/forecast" + q);
+    err.style.display = "none";
+
+    let html = "";
+    for (let i = 0; i < f.time.length; i++) {
+      const d = new Date(f.time[i] + "T00:00:00");
+      const day = d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+      const prob = f.precipitation_probability_max[i];
+      const probText = (prob === null || prob === undefined) ? "--" : prob + "%";
+      html += '<div class="fcard">' +
+        '<div class="fday">' + day + '</div>' +
+        '<div class="fmax">' + f.temperature_2m_max[i] + '°</div>' +
+        '<div class="fmin">Min ' + f.temperature_2m_min[i] + '°</div>' +
+        '<div class="frain">Rain ' + f.precipitation_sum[i] + ' mm</div>' +
+        '<div class="fprob">Chance ' + probText + '</div>' +
+        '</div>';
+    }
+    document.getElementById("fgrid").innerHTML = html;
+  } catch (e) {
+    if (e.message !== "auth") err.style.display = "block";
+  }
+}
+
+function makeChart(id, labels, data, color) {
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(document.getElementById(id), {
+    type: "bar",
+    data: { labels: labels, datasets: [{ data: data, backgroundColor: color }] },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: "#94a3b8" }, grid: { color: "#334155" } },
+        y: { ticks: { color: "#94a3b8" }, grid: { color: "#334155" }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+async function loadReports() {
+  const err = document.getElementById("error");
+  try {
+    const h = await api("/history");
+    err.style.display = "none";
+    reportsLoaded = true;
+
+    const s = h.summary;
+    document.getElementById("range").textContent = "Thanjavur (home location) | Data: " + s.from + " to " + s.to + " (" + s.total_days + " days)";
+    document.getElementById("s-rainy").textContent = s.rainy_days;
+    document.getElementById("s-dry").textContent = s.dry_days;
+    document.getElementById("s-heavy").textContent = s.heaviest_mm + " mm";
+    document.getElementById("s-heavy-date").textContent = s.heaviest_date;
+
+    makeChart("chart7", h.last7.dates, h.last7.rain, "#38bdf8");
+    makeChart("chartMonthly", h.monthly.labels, h.monthly.rain, "#818cf8");
+    makeChart("chartYearly", h.yearly.labels, h.yearly.rain, "#34d399");
+  } catch (e) {
+    if (e.message !== "auth") err.style.display = "block";
+  }
+}
+
+/* ---------- Start ---------- */
+(async function init() {
+  loadSession();
+  if (!token) return;  // login screen stays visible
+  try {
+    const me = await api("/me");
+    sessionUser = me.username;
+    enterApp();
+  } catch (e) {
+    /* login screen stays visible */
+  }
+})();
+</script>
+</body>
+</html>
